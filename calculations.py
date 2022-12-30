@@ -141,9 +141,9 @@ def _calculate_paid_salary(annual_salary, bands_order, bands,
 
     tax_paid = income_tax_paid + nat_ins_paid
 
-    paid_salary = annual_salary - tax_paid
+    paid_salary_yearly = annual_salary - tax_paid
 
-    return {'paid_salary':paid_salary, 'income_tax_paid':income_tax_paid, 'nat_ins_paid':nat_ins_paid}
+    return {'paid_salary_yearly':paid_salary_yearly, 'income_tax_paid_yearly':income_tax_paid, 'nat_ins_paid_yearly':nat_ins_paid}
 
 
 def after_t_years(initial_investment, interest_rate, periods, years):
