@@ -50,6 +50,7 @@ def calculate_yearly_series(yearly_series: pd.Series,
     :return:
     """
 
+
     yearly_series = yearly_series.copy()
     if inflate_max_amount:
         max_amount_ = calculate_compound_savings(pd.Series([max_amount] * len(yearly_series), name='max_amount'), 0,
@@ -143,7 +144,7 @@ def _calculate_paid_salary(annual_salary, bands_order, bands,
 
     paid_salary_yearly = annual_salary - tax_paid
 
-    return {'paid_salary_yearly':paid_salary_yearly, 'income_tax_paid_yearly':income_tax_paid, 'nat_ins_paid_yearly':nat_ins_paid}
+    return {'net_salary_yearly':paid_salary_yearly, 'income_tax_paid_yearly':income_tax_paid, 'nat_ins_paid_yearly':nat_ins_paid}
 
 
 def after_t_years(initial_investment, interest_rate, periods, years):

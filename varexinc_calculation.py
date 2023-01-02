@@ -11,7 +11,12 @@ def get_compounding_exp(cases,
                         COMPOUNDING_PERIODS,
                         ):
     data_monthly = pd.DataFrame()
-    for (target, source, factor, initial) in cases:
+    for case in cases:
+        target = case.get('target', None)
+        source = case.get('source', None)
+        factor = case.get('factor', None)
+        initial = case.get('initial', None)
+
         data_monthly[target] = source * factor
         total = calculate_compound_savings(data_monthly[target], initial, interest_rate, COMPOUNDING_PERIODS)
         data_monthly[f'{target}_total'] = total['total']
@@ -19,15 +24,15 @@ def get_compounding_exp(cases,
 
     return data_monthly
 
-    # data_monthly['personal_savings'] = data_monthly['paid_salary'] * save_factor
-    # data_monthly['student_loan'] = data_monthly['paid_salary'] * student_loan_factor
-    # data_monthly['workplace_pension'] = data_monthly['salary'] * workplace_pension_amount
-    # data_monthly['workplace_pension_combined'] = data_monthly['salary'] * (workplace_pension_amount \
+    # data_monthly['personal_pension_savings'] = data_monthly['net_salary'] * save_factor
+    # data_monthly['student_loan'] = data_monthly['net_salary'] * student_loan_factor
+    # data_monthly['workplace_pension'] = data_monthly['gross_salary'] * workplace_pension_amount
+    # data_monthly['workplace_pension_combined'] = data_monthly['gross_salary'] * (workplace_pension_amount \
     #                                                                        + employer_pension_contribution *
     #                                                                        (workplace_pension_amount / 0.035))
     #
     # # calculate total compound savings based on constant interest rate
-    # for c, initial in [('personal_savings', initial_personal_savings),
+    # for c, initial in [('personal_pension_savings', initial_personal_savings),
     #                    ('student_loan', initial_student_loan_paid),
     #                    ('workplace_pension', 0),
     #                    ('workplace_pension_combined', initial_workplace_pension),
