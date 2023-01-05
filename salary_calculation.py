@@ -1,8 +1,10 @@
 import datetime
+import math
 import numpy as np
 import pandas as pd
 
-from calculations import calculate_paid_yearly_salary, expand_yearly_to_monthly, calculate_yearly_series
+from calculations import calculate_paid_yearly_salary, expand_yearly, calculate_yearly_series, condition_transaction_date
+import config as cfg
 
 
 def get_salary_and_tax(annual_salary: int,
@@ -82,4 +84,12 @@ def get_salary_and_tax(annual_salary: int,
     data_monthly['nat_ins_paid'] = data_monthly['nat_ins_paid_yearly'] / PERIODS
     data_monthly['net_salary'] = data_monthly['net_salary_yearly'] / PERIODS
 
-    return data_monthly
+    for c in salary_cols:
+        periodic_data[c] = periodic_data[f'{c}_yearly'] / 12
+
+    if not freq == 'M':
+        salary_cols = sum([list(map(lambda c: c + y, salary_cols)) for y in ['', '_yearly']], [])
+        periodic_data = condition_transaction_date(periodic_data, {**savings_loans_day,
+                                                   **{k: pay_day for k in salary_cols}})
+
+    return periodic_data

@@ -10,7 +10,11 @@ monthly_salary_contribution = paid_salary / PERIODS
 """
 import pandas as pd
 import numpy as np
+import math
+import holidays
 import datetime
+
+import calendar
 
 
 def calculate_income_tax(annual_salary, bands_order, bands):
@@ -147,9 +151,56 @@ def _calculate_paid_salary(annual_salary, bands_order, bands,
     return {'net_salary_yearly':paid_salary_yearly, 'income_tax_paid_yearly':income_tax_paid, 'nat_ins_paid_yearly':nat_ins_paid}
 
 
-def after_t_years(initial_investment, interest_rate, periods, years):
-    return initial_investment * (pow((1 + interest_rate / periods), periods * years))
+def pv(c, r, p, t):
+    return c/pow((1 + r / p), p * t)
 
 
-def interest_after_t_years(initial_investment, interest_rate, periods, years):
-    return initial_investment * (pow((interest_rate / periods), periods * years))
+def fv(c, r, p, t):
+    return c * (pow((1 + r / p), p * t))
+
+
+def after_t_years(initial_investment, interest_rate_per_year, periods, years):
+    return initial_investment * (pow((1 + interest_rate_per_year / periods), periods * years))
+
+
+def interest_after_t_years(initial_investment, interest_rate_per_year, periods, years):
+    return initial_investment * (pow((interest_rate_per_year / periods), periods * years))
+
+
+def diff_month(d1, d2):
+    return (d1.year - d2.year) * 12 + d1.month - d2.month
+
+def get_next_business_day(day):
+    ONE_DAY = datetime.timedelta(days=1)
+    HOLIDAYS = holidays.UK()
+
+    next_day = day
+    while next_day.weekday() in holidays.WEEKEND or next_day in HOLIDAYS:
+        next_day += ONE_DAY
+    return next_day
+
+
+def previous_business_day(day):
+    ONE_DAY = datetime.timedelta(days=-1)
+    HOLIDAYS = holidays.UK()
+
+    prev_day = day + ONE_DAY
+    while prev_day.weekday() in holidays.WEEKEND or prev_day in HOLIDAYS:
+        prev_day += ONE_DAY
+    return prev_day
+
+
+def condition_transaction_date(periodic, day_transaction, next_business_day={}, prev_business_day={}):
+    periodic['_m'] = periodic.index.to_series().dt.month
+    periodic['_y'] = periodic.index.to_series().dt.year
+    for col in periodic:
+        if col in day_transaction and day_transaction[col] is not None:
+            out_date = periodic.index.to_series().dt.day == day_transaction[col]
+            if col in next_business_day and next_business_day[col]:
+                out_dates = out_date[out_date].index.to_series().apply(get_next_business_day)
+                out_date = periodic.index.to_series().isin(out_dates)
+            periodic.loc[~out_date, col] = 0
+        else:
+            periodic[col] = periodic.groupby(['_y', '_m'])[col].transform(lambda g: g / len(g))
+    periodic = periodic.drop(columns=['_m', '_y'])
+    return periodic

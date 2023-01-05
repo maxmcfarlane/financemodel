@@ -1,9 +1,9 @@
+import math
+
 import numpy as np
 import pandas as pd
 
-from calculations import expand_yearly_to_monthly, calculate_yearly_series, calculate_compound_savings
-
-
+from calculations import expand_yearly, calculate_yearly_series, calculate_compound_savings, condition_transaction_date
 
 
 def get_compounding_exp(cases,
@@ -86,7 +86,12 @@ def get_varexinc(
             monthly.loc[varex_end.get(idc, None):] = 0
         monthly_varex.append(monthly)
 
-    monthly_varex = pd.concat(monthly_varex, axis=1)
+    periodic_varex = pd.concat(periodic_varex, axis=1).iloc[:volume, :]
+
+    if freq == 'D':
+        periodic_varex_ = periodic_varex.copy()
+        periodic_varex = condition_transaction_date(periodic_varex, varex_out,
+                                                    next_business_day=varex_next_business_day)
 
     for idc, col in yearly_varinc.iteritems():
         if varinc_inflation.get(idc, False):
@@ -100,6 +105,8 @@ def get_varexinc(
                                            start_from)
         monthly_varinc.append(monthly)
 
-    monthly_varinc = pd.concat(monthly_varinc, axis=1)
+    if freq == 'D':
+        periodic_varinc_ = periodic_varinc.copy()
+        periodic_varinc = condition_transaction_date(periodic_varinc, varinc_in)
 
     return monthly_varinc, monthly_varex
