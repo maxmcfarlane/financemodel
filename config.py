@@ -15,63 +15,79 @@ age_at_time_of_writing = 26  # Current age of the user
 birthday = datetime.datetime(year=2022, month=11, day=10)
 country = 'Scotland'
 
-as_of = datetime.datetime(year=2022, month=12, day=29)
+# as_of = datetime.datetime(year=2022, month=12, day=29)
+start_from = datetime.datetime(year=2023, month=1, day=1, hour=1)
+balance = 1289.24
 annual_salary = 42000  # Annual salary of the user
 pay_day = 24
+savings_factor = 0.114
 
 monthly_daily = False
 
 savings_loans = [
+    'workplace_pension',
+    'student_loan',
+    'healthcare_offset_loan',
+    'underpaid_tax_loan',
     'personal_pension_savings',
     'house_savings',
-    'student_loan',
-    'workplace_pension',
     'workplace_pension_supplement',
 ]
 
 savings_loans_source = {
+    'workplace_pension': 'gross_salary',
+    'student_loan': 'gross_salary',
+    'healthcare_offset_loan': 'gross_salary',
+    'underpaid_tax_loan': 'gross_salary',
     'personal_pension_savings': 'net_salary',
     'house_savings': 'net_salary',
-    'student_loan': 'gross_salary',
-    'workplace_pension': 'gross_salary',
     'workplace_pension_supplement': 'gross_salary',
 }
 
 savings_loans_type = {
+    'workplace_pension': 'savings',
+    'student_loan': 'loan',
+    'healthcare_offset_loan': 'loan',
+    'underpaid_tax_loan': 'loan',
     'personal_pension_savings': 'savings',
     'house_savings': 'savings',
-    'student_loan': 'loan',
-    'workplace_pension': 'savings',
     'workplace_pension_supplement': 'aggregated_savings',
 }
 
 savings_loans_day = {
+    'workplace_pension': pay_day,
+    'student_loan': pay_day,
+    'healthcare_offset_loan': pay_day,
+    'underpaid_tax_loan': pay_day,
     'personal_pension_savings': pay_day+1,
     'house_savings': pay_day+1,
-    'student_loan': pay_day,
-    'workplace_pension': pay_day,
     'workplace_pension_supplement': pay_day,
 }
 
 initial_balances = {
+    'workplace_pension': 0,
+    'student_loan': 120 * 12 * 3,
+    'healthcare_offset_loan': 0,
+    'underpaid_tax_loan': 0,
     'personal_pension_savings': 0,
     'house_savings': 10000,
-    'student_loan': 120 * 12 * 3,
-    'workplace_pension': 0,
     'workplace_pension_supplement': 912 * 2
+}
+
+savings_cost_factors = {
+    'workplace_pension': 0.028,
+    'student_loan': 0.0362,
+    'healthcare_offset_loan': 343.30/42000,
+    'underpaid_tax_loan': 151.4025/(42000/12),
+    'workplace_pension_supplement': 0.07,  # at workplace_pension_supplement_limit = 3.5%
+
+    'house_savings': savings_factor/2,  # 0.114/2
+    'personal_pension_savings': savings_factor/2,  # 0.114/2
 }
 
 # retirement_age = 65  # Age at which the user wants to retire
 retirement_age = 30  # Age at which the user wants to retire
 savings_goal = 1e6  # Savings goal for retirement
-
-savings_cost_factors = {
-    'house_savings': 0.114/2,
-    'personal_pension_savings': 0.114/2,
-    'student_loan': 0.04,
-    'workplace_pension': 0.028,
-    'workplace_pension_supplement': 0.07  # at workplace_pension_supplement_limit = 3.5%
-}
 
 workplace_pension_supplement_limit = 0.035
 
@@ -123,10 +139,22 @@ def set_promotion_rate(
     global promotion_frequency_years
     promotion_frequency_years = promotion_frequency_years_
 
+def set_savings_factor(
+        savings_factor_,
+):
+    global savings_factor, savings_cost_factors
+    savings_factor = savings_factor_
+    savings_cost_factors.update(
+        {
+            'house_savings': savings_factor / 2,  # 0.114/2
+            'personal_pension_savings': savings_factor / 2,  # 0.114/2
+        }
+    )
+
 
 # salary_increase_promotion = 0
 # promotion_frequency_years = 0
-salary_increase_promotion = 0.08
+salary_increase_promotion = 0.07
 promotion_frequency_years = 5
 
 # salary_decrease_role_change = 0
@@ -138,8 +166,7 @@ role_change_frequency_years = 10
 # max_salary = 110 * 1e6
 max_salary = 95 * 1e3
 
-start_from = datetime.datetime.now().replace(microsecond=0, second=0, minute=0, hour=0)
-# start_from = datetime.datetime(year=2023, month=4, day=1, hour=6)
+# start_from = datetime.datetime.now().replace(microsecond=0, second=0, minute=0, hour=0)
 
 GROSS_SALARY = ['gross_salary']
 SALARY_COLS = ['gross_salary', 'net_salary']
@@ -172,17 +199,17 @@ else:
 
 # calculated configurations
 bands_order = list(INCOME_TAX_BANDS.keys())
-current_age = age_at_time_of_writing + math.floor((datetime.datetime.now() - birthday).days / 365)
+current_age = age_at_time_of_writing + math.floor((start_from - birthday).days / 365)
 
 years_until_retirement = retirement_age - current_age
 
 
 months_until_retirement = diff_month(
     birthday + pd.offsets.DateOffset(years=retirement_age - age_at_time_of_writing),
-    datetime.datetime.now()
+    start_from
 )
 days_until_retirement = (birthday + pd.offsets.DateOffset(years=retirement_age - age_at_time_of_writing) -
-                         datetime.datetime.now()).days + 1
+                         start_from).days + 1
 
 
 def get_savings():

@@ -106,7 +106,7 @@ def expand_yearly(values, name,
                            freq=freq)
 
     if freq == 'D':
-        granularity = [365 + (1 if calendar.isleap(y) else 0) for y in range_.to_series().dt.year.unique()[:-1]]
+        granularity = [365 + (1 if calendar.isleap(y) else 0) for y in range_.to_series().dt.year.unique()]
 
     periodic = pd.Series(np.repeat(values, (granularity)),
                                       name=name,
@@ -216,7 +216,7 @@ def get_next_business_day(day):
     return next_day
 
 
-def previous_business_day(day):
+def get_previous_business_day(day):
     ONE_DAY = datetime.timedelta(days=-1)
     HOLIDAYS = holidays.UK()
 
@@ -230,10 +230,18 @@ def condition_transaction_date(periodic, day_transaction, next_business_day={}, 
     periodic['_m'] = periodic.index.to_series().dt.month
     periodic['_y'] = periodic.index.to_series().dt.year
     for col in periodic:
+        if col in ['_y', '_m']:
+            continue
         if col in day_transaction and day_transaction[col] is not None:
-            out_date = periodic.index.to_series().dt.day == day_transaction[col]
+            if isinstance(day_transaction[col], tuple):
+                out_date = (periodic.index.to_series().dt.day == day_transaction[col][0]) & (periodic.index.to_series().dt.month == day_transaction[col][1])
+            else:
+                out_date = periodic.index.to_series().dt.day == day_transaction[col]
             if col in next_business_day and next_business_day[col]:
                 out_dates = out_date[out_date].index.to_series().apply(get_next_business_day)
+                out_date = periodic.index.to_series().isin(out_dates)
+            if col in prev_business_day and prev_business_day[col]:
+                out_dates = out_date[out_date].index.to_series().apply(get_previous_business_day)
                 out_date = periodic.index.to_series().isin(out_dates)
             periodic.loc[~out_date, col] = 0
         else:

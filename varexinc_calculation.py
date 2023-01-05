@@ -57,9 +57,11 @@ def get_varexinc(
         varex_inflation,
         varex_out,
         varex_next_business_day,
+        varinc_prev_business_day,
         varex_varin_increase_inflation,
         varex_max,
         varex_end,
+        varinc_end,
         varinc_inflation,
         varinc_in,
         start_from,
@@ -84,8 +86,12 @@ def get_varexinc(
     #
     # years = math.ceil(months/12)
 
-    yearly_varex = pd.DataFrame({k: pd.Series(np.repeat([v], math.ceil(years))) for k, v in varex.items()})
-    yearly_varinc = pd.DataFrame({k: pd.Series(np.repeat([v], math.ceil(years))) for k, v in varinc.items()})
+    yearly_varex = pd.DataFrame({k: pd.Series(np.repeat([v], math.ceil(years)))
+                                              for k, v in varex.items()
+                                              if not isinstance(v, list)})
+    yearly_varinc = pd.DataFrame({k: pd.Series(np.repeat([v], math.ceil(years)))
+                                              for k, v in varinc.items()
+                                              if not isinstance(v, list)})
 
     for idc, col in yearly_varex.iteritems():
         if varex_inflation.get(idc, True):
@@ -109,10 +115,9 @@ def get_varexinc(
 
     periodic_varex = pd.concat(periodic_varex, axis=1).iloc[:volume, :]
 
-    if freq == 'D':
-        periodic_varex_ = periodic_varex.copy()
-        periodic_varex = condition_transaction_date(periodic_varex, varex_out,
-                                                    next_business_day=varex_next_business_day)
+    periodic_varex_ = periodic_varex.copy()
+    periodic_varex = condition_transaction_date(periodic_varex, varex_out,
+                                                next_business_day=varex_next_business_day)
 
     for idc, col in yearly_varinc.iteritems():
         if varinc_inflation.get(idc, False):
@@ -128,13 +133,15 @@ def get_varexinc(
             granularity=granularity,
             freq=freq
         )
+        if varinc_end.get(idc, None) is not None:
+            periodic.loc[varinc_end.get(idc):] = 0
         periodic_varinc.append(periodic)
 
     periodic_varinc = pd.concat(periodic_varinc, axis=1).iloc[:volume, :]
 
-    if freq == 'D':
-        periodic_varinc_ = periodic_varinc.copy()
-        periodic_varinc = condition_transaction_date(periodic_varinc, varinc_in)
+    periodic_varinc_ = periodic_varinc.copy()
+    periodic_varinc = condition_transaction_date(periodic_varinc, varinc_in,
+                                                 prev_business_day=varinc_prev_business_day)
 
     periodic_varinc.index.names = ['date/time']
     periodic_varex.index.names = ['date/time']

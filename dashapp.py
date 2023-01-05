@@ -19,10 +19,13 @@ def left_label(comp, name, style=None):
     ], style=style)
 
 
-def create_sliders(assume_inflation):
-    percentage_rate_marks = {i / 100: f'{i}' for i in range(0, 12, 1)}
-    integer_marks = {i: f'{i}' for i in range(0, 12, 1)}
-    tooltip_marks = lambda id_: {'always_visible': False}
+percentage_interest_rate_marks = {i / 100: f'{i}' for i in range(0, 12, 1)}
+percentage_savings_rate_marks = {i / 100: f'{i}' for i in range(0, 20, 1)}
+integer_marks = {i: f'{i}' for i in range(0, 12, 1)}
+tooltip_marks = lambda id_: {'always_visible': False}
+
+
+def create_interest_sliders(assume_inflation):
     return [
         left_label(
             dbc.Spinner(
@@ -31,7 +34,7 @@ def create_sliders(assume_inflation):
                            max=0.1,
                            step=0.001,
                            value=cfg.inflation_rate,
-                           marks=percentage_rate_marks,
+                           marks=percentage_interest_rate_marks,
                            className='slider',
                            tooltip=tooltip_marks('inflation_rate')),
             ),
@@ -44,7 +47,7 @@ def create_sliders(assume_inflation):
                            max=0.1,
                            step=0.001,
                            value=cfg.interest_rate,
-                           marks=percentage_rate_marks,
+                           marks=percentage_interest_rate_marks,
                            className='slider',
                            tooltip=tooltip_marks('interest_rate')),
             ),
@@ -71,7 +74,7 @@ def create_sliders(assume_inflation):
                            max=0.1,
                            step=0.001,
                            value=cfg.salary_increase_inflation,
-                           marks=percentage_rate_marks,
+                           marks=percentage_interest_rate_marks,
                            className='slider',
                            tooltip=tooltip_marks('salary_increase_inflation')),
             ),
@@ -85,7 +88,7 @@ def create_sliders(assume_inflation):
                            max=0.1,
                            step=0.001,
                            value=cfg.varex_varin_increase_inflation,
-                           marks=percentage_rate_marks,
+                           marks=percentage_interest_rate_marks,
                            className='slider',
                            tooltip=tooltip_marks('varex_varin_increase_inflation')),
             ),
@@ -108,22 +111,27 @@ def create_app(server_):
 
     DIR = os.path.dirname(__file__)
 
-    if os.path.exists(f'{DIR}/pension_fig.p'):
-        pension_fig = pickle.load(open(f'{DIR}/pension_fig.p', 'rb'))
-    else:
-        # insert graph generator
-        # fig = generate_fig(m.centre, m.target, m.radius_miles, opacity=0.4)
-        data_monthly = main.generate_table_data()
+    daily, monthly, _, _, _, \
+    periodic_salary_tax_data_monthly, _, _ = main.generate_table_data()
 
-        pension_fig = generate_pension_fig(data_monthly, cfg.savings_goal)
-        pickle.dump(pension_fig, open(f'{DIR}/pension_fig.p', 'wb'))
+    pension_fig = generate_pension_fig(periodic_salary_tax_data_monthly, cfg.savings_goal)
+    balance_fig = generate_balance_fig(daily, monthly, cfg.balance)
 
     app.layout = html.Div([
         # Add the plotly figure
 
-        dcc.Graph(figure=pension_fig,
-                  id='plot',
-                  style={'height': f'{int(graph_height)}vh', 'width': '100%'}),
+        dbc.Row([
+            dbc.Col([
+                dcc.Graph(figure=pension_fig,
+                          id='pension_fig',
+                          style={'height': f'{int(graph_height)}vh', 'width': '100%'}),
+            ]),
+            dbc.Col([
+                dcc.Graph(figure=balance_fig,
+                          id='balance_fig',
+                          style={'height': f'{int(graph_height)}vh', 'width': '100%'}),
+            ])
+        ]),
         dbc.Container([
             dbc.Row([
                 dbc.Col([
@@ -150,7 +158,7 @@ def create_app(server_):
                         dbc.CardBody([
                             dbc.Row([
                                 dbc.Col([
-                                    html.Div(create_sliders(uicfg.ASSUME_INFLATION), id='interest-sliders')
+                                    html.Div(create_interest_sliders(uicfg.ASSUME_INFLATION), id='interest-sliders')
                                 ], xs=12, sm=12, md=12, lg=12, xl=12, xxl=12),
                             ]),
 
@@ -161,21 +169,24 @@ def create_app(server_):
                 dbc.Col([
                     dbc.Card([
                         dbc.CardHeader([
-                            html.H5('Setting [units]:'),
+                            html.H5('Savings [%]:'),
                         ]),
                         dbc.CardBody([
                             dbc.Row([
                                 dbc.Col([
                                     html.Div([
-
-                                        dbc.Spinner(
-                                            dcc.RangeSlider(id='setting3-slider',
-                                                            min=0,
-                                                            max=600,
-                                                            step=5,
-                                                            value=(0, 600),
-                                                            marks={i: f'{i}' for i in range(45, 605, 100)},
-                                                            className='slider'),
+                                        left_label(
+                                            dbc.Spinner(
+                                                dcc.Slider(id='savings_factor-slider',
+                                                           min=0,
+                                                           max=max(list(percentage_savings_rate_marks.keys())),
+                                                           step=0.001,
+                                                           value=cfg.savings_factor,
+                                                           marks=percentage_savings_rate_marks,
+                                                           className='slider',
+                                                           tooltip=tooltip_marks('savings_factor')),
+                                            ),
+                                            'savings_factor',
                                         )
                                     ])
                                 ], xs=12, sm=12, md=12, lg=12, xl=12, xxl=12),
@@ -252,7 +263,8 @@ def create_app(server_):
     # Define a callback function to update the figure's opacity when the slider value changes
     @app.callback(
         [
-            dash.dependencies.Output('plot', 'figure'),
+            dash.dependencies.Output('pension_fig', 'figure'),
+            dash.dependencies.Output('balance_fig', 'figure'),
             dash.dependencies.Output('inflation-slider', 'value'),
             dash.dependencies.Output('interest-sliders', 'children'),
         ],
@@ -263,9 +275,13 @@ def create_app(server_):
             dash.dependencies.Input('salary_increase_inflation-slider', 'value'),
             dash.dependencies.Input('varex_varin_increase_inflation-slider', 'value'),
             dash.dependencies.Input('inflation-checkbox', 'value'),
+
+            dash.dependencies.Input('savings_factor-slider', 'value'),
+
         ],
         [
-            dash.dependencies.State('plot', 'figure'),
+            dash.dependencies.State('pension_fig', 'figure'),
+            dash.dependencies.State('balance_fig', 'figure'),
             dash.dependencies.State('interest-sliders', 'children'),
         ],
         prevent_initial_callbacks=True
@@ -277,35 +293,46 @@ def create_app(server_):
             salary_increase_inflation_,
             varex_varin_increase_inflation_,
             assume_inflation,
+            savings_factor,
             pension_fig,
+            balance_fig,
             interest_sliders):
         # Get the current figure
         # Update the figure's opacity
 
         assume_inflation = 'interest' in assume_inflation
-        if \
-                dash.callback_context.triggered_id == 'inflation-slider' or \
-                dash.callback_context.triggered_id == 'promotion_frequency_years-slider' or \
-                (dash.callback_context.triggered_id == 'interest_rate-slider' and not assume_inflation) or \
-                (dash.callback_context.triggered_id == 'salary_increase_inflation-slider' and not assume_inflation) or \
-                (dash.callback_context.triggered_id == 'varex_varin_increase_inflation-slider' and not assume_inflation):
+        if dash.callback_context.triggered_id == 'inflation-slider' or \
+                        dash.callback_context.triggered_id == 'promotion_frequency_years-slider' or \
+                        dash.callback_context.triggered_id == 'savings_factor-slider' or \
+                        (dash.callback_context.triggered_id == 'interest_rate-slider' and not assume_inflation) or \
+                        (
+                                dash.callback_context.triggered_id == 'salary_increase_inflation-slider' and not assume_inflation) or \
+                        (
+                                dash.callback_context.triggered_id == 'varex_varin_increase_inflation-slider' and not assume_inflation):
+
             cfg.set_inflation_rate(inflation_rate_,
                                    interest_rate_,
                                    salary_increase_inflation_,
                                    varex_varin_increase_inflation_, assume_inflation)
             cfg.set_promotion_rate(promotion_frequency_years_)
-            data_monthly = main.generate_table_data()
-            pension_fig = generate_pension_fig(data_monthly, cfg.savings_goal)
+            cfg.set_savings_factor(savings_factor)
+
+            daily, monthly, _, _, _, \
+            periodic_salary_tax_data_monthly, _, _ = main.generate_table_data()
+
+            balance_fig = generate_balance_fig(daily, monthly, cfg.balance)
+            pension_fig = generate_pension_fig(periodic_salary_tax_data_monthly, cfg.savings_goal)
         elif dash.callback_context.triggered_id == 'inflation-checkbox':
             cfg.set_inflation_rate(inflation_rate_,
                                    interest_rate_,
                                    salary_increase_inflation_,
                                    varex_varin_increase_inflation_, assume_inflation)
-            interest_sliders = create_sliders(assume_inflation)
+            interest_sliders = create_interest_sliders(assume_inflation)
             if assume_inflation:
-                data_monthly = main.generate_table_data()
-                pension_fig = generate_pension_fig(data_monthly, cfg.savings_goal)
+                daily, monthly, _, _, _, \
+                periodic_salary_tax_data_monthly, _, _ = main.generate_table_data()
+                pension_fig = generate_pension_fig(periodic_salary_tax_data_monthly, cfg.savings_goal)
 
-        return [pension_fig, inflation_rate_, interest_sliders]
+        return [pension_fig, balance_fig, inflation_rate_, interest_sliders]
 
     return app.server

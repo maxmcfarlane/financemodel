@@ -22,10 +22,15 @@ def combine(df, sum_all=False):
     periodic_salary_tax_data_ = df.copy()
     periodic_salary_tax_data_['_m'] = df.index.to_series().dt.month
     periodic_salary_tax_data_['_y'] = df.index.to_series().dt.year
-    periodic_salary_tax_data_monthly = periodic_salary_tax_data_ \
-        .groupby(['_y', '_m']) \
-        [[c for c in periodic_salary_tax_data_.columns if c not in ['_y', '_m']]] \
+
+    periodic_salary_tax_data_monthly = periodic_salary_tax_data_.groupby(['_y', '_m'])
+
+    periodic_salary_tax_data_monthly = periodic_salary_tax_data_monthly[[c for c in periodic_salary_tax_data_.columns
+                                                                         if c not in ['_y', '_m']]]
+
+    periodic_salary_tax_data_monthly = periodic_salary_tax_data_monthly\
         .aggregate(lambda g: sum(g) if sum_all else max(g) if all(g >= 0) else min(g) if all(g <= 0) else sum(g))
+
     periodic_salary_tax_data_monthly['date/time'] = periodic_salary_tax_data_ \
         .reset_index() \
         .groupby(['_y', '_m']) \
@@ -87,9 +92,11 @@ def generate_table_data():
         var_inputs.varex_inflation,
         var_inputs.varex_out,
         var_inputs.varex_next_business_day,
+        var_inputs.varinc_prev_business_day,
         cfg.varex_varin_increase_inflation,
         var_inputs.varex_max,
         var_inputs.varex_end,
+        var_inputs.varinc_end,
         var_inputs.varinc_inflation,
         var_inputs.varinc_in,
         cfg.start_from,
@@ -105,12 +112,20 @@ def generate_table_data():
     income_monthly = combine(periodic_varinc, sum_all=True)
     expenditure_monthly = combine(periodic_varex, sum_all=True)
 
-    return periodic_salary_tax_data, income, expenditure,  periodic_salary_tax_data_monthly, income_monthly, expenditure_monthly
+    daily = pd.concat([
+        periodic_salary_tax_data[cfg.GROSS_SALARY + cfg.TAX_COLS + cfg.get_savings() + cfg.get_loans()],
+        income,
+        expenditure,
+    ], axis=1)
+    monthly = combine(daily, sum_all=True)
+
+    return daily, monthly, \
+           periodic_salary_tax_data, income, expenditure,  periodic_salary_tax_data_monthly, income_monthly, expenditure_monthly
 
 
 
 if __name__ == '__main__':
-    periodic_salary_tax_data, income, expenditure,\
+    daily, monthly, periodic_salary_tax_data, income, expenditure,\
         periodic_salary_tax_data_monthly, income_monthly, expenditure_monthly = generate_table_data()
 
     # ------------------------------------------------------------------------------------------------------------------
@@ -121,6 +136,7 @@ if __name__ == '__main__':
     # fig.show()
 
     generate_pension_fig(periodic_salary_tax_data, cfg.savings_goal)
+    generate_balance_fig(daily, monthly, cfg.balance)
 
     # ------------------------------------------------------------------------------------------------------------------
 

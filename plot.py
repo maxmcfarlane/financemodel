@@ -1,10 +1,11 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.offsetbox import AnchoredText
-import dash
+import datetime
 from dash import html
 from dash import dcc
 import pickle
+import plotly.graph_objects as go
 import os
 import dash_bootstrap_components as dbc
 import main as m
@@ -41,6 +42,23 @@ def generate_pension_fig(data_monthly, savings_goal):
 
     fig = px.line(data_monthly_)
     # fig.show()
+    return fig
+
+def generate_balance_fig(daily, monthly, balance,
+                         from_=datetime.datetime.now(), to_=datetime.datetime.now() + datetime.timedelta(days=365)):
+
+    daily.loc[:to_, :].sum(axis=1).plot()
+    monthly.loc[:to_, :].sum(axis=1).plot()
+    plt.show()
+    daily_trace = (balance + (daily.loc[from_:to_, :].sum(axis=1).cumsum()))
+    daily_trace.name = 'daily'
+    monthly_trace = (balance + (monthly.loc[from_:to_, :].sum(axis=1).cumsum()))
+    monthly_trace.name = 'monthly'
+
+    fig = px.line(
+        pd.DataFrame(daily_trace).merge(pd.DataFrame(monthly_trace), how='left', left_index=True, right_index=True),
+    )
+    fig.update_traces(connectgaps=True)
     return fig
 
 
