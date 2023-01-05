@@ -4,6 +4,7 @@ import main
 from plot import *
 import config as cfg
 import ui_config as uicfg
+import dash_table
 
 external_stylesheets = [dbc.themes.BOOTSTRAP]
 
@@ -111,11 +112,27 @@ def create_app(server_):
 
     DIR = os.path.dirname(__file__)
 
-    daily, monthly, _, _, _, \
-    periodic_salary_tax_data_monthly, _, _ = main.generate_table_data()
 
-    pension_fig = generate_pension_fig(periodic_salary_tax_data_monthly, cfg.savings_goal)
-    balance_fig = generate_balance_fig(daily, monthly, cfg.balance)
+    if not os.path.exists('./cache.p'):
+        daily, monthly, _, _, _, \
+        periodic_salary_tax_data_monthly, _, _ = main.generate_table_data()
+
+        pension_fig = generate_pension_fig(periodic_salary_tax_data_monthly, cfg.savings_goal)
+        balance_fig = generate_balance_fig(daily, monthly, cfg.balance)
+
+        pickle.dump((
+            pension_fig,
+            daily, monthly,
+            periodic_salary_tax_data_monthly,
+            balance_fig,
+        ), open('./cache.p', 'wb'))
+    else:
+        (
+            pension_fig,
+            daily, monthly,
+            periodic_salary_tax_data_monthly,
+            balance_fig,
+        ) = pickle.load(open('./cache.p', 'rb'))
 
     app.layout = html.Div([
         # Add the plotly figure
@@ -256,8 +273,32 @@ def create_app(server_):
                 ], xs=12, sm=12, md=12, lg=6, xl=6, xxl=6, style={'padding-top': f'{settings_pad}vh'}),
             ])
         ], style={'height': f'{100 - int(graph_height) - int(2 * settings_pad)}vh', 'width': '100%',
-                  'padding-top': f'{settings_pad}vh'})
-    ], style={'height': '100vh', 'width': '100%'}
+                  'padding-top': f'{settings_pad}vh'}),
+        dbc.Row([
+            dbc.Col([
+                dbc.Card([
+                    html.Div([
+                        dash_table.DataTable(
+                            id='table',
+                            columns=[{"name": i, "id": i} for i in daily.reset_index().columns],
+                            data=daily.iloc[:365, :].reset_index().to_dict('records'),
+                            # style_table={
+                            #     'maxHeight': '75vh',
+                            #     'maxWidth': '75vw',
+                            #     'overflowY': 'scroll'
+                            # }
+                        )
+                    ])
+                    # dbc.Table.from_dataframe(daily.iloc[:365, :].reset_index())
+                ], style={
+                        'height': '75vh',
+                        'width': '75vw',
+                        'overflowY': 'scroll'
+                    })
+            ])
+        ]),
+
+    ], style={'height': '100vh', 'width': '98vw'}
     )
 
     # Define a callback function to update the figure's opacity when the slider value changes
