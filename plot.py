@@ -13,8 +13,8 @@ import plotly.express as px
 
 def plot_pension(data_monthly, savings_goal):
     # wrangle outputs for plotting
-    data_monthly_ = data_monthly[['net_salary_yearly', 'personal_pension_savings_total', 'workplace_pension_supplement_total']].copy()
-    data_monthly_['total'] = data_monthly_['personal_pension_savings_total'] + data_monthly_['workplace_pension_supplement_total']
+    data_monthly_ = data_monthly[['net_salary_yearly', 'personal_pension_savings', 'workplace_pension_supplement']].copy()
+    data_monthly_['total'] = data_monthly['workplace_pension_supplement_total']
     data_monthly_['target'] = savings_goal
     total_saved = data_monthly_['total'].max()
 
@@ -34,8 +34,8 @@ def plot_pension(data_monthly, savings_goal):
 
 def generate_pension_fig(data_monthly, savings_goal):
     # wrangle outputs for plotting
-    data_monthly_ = data_monthly[['net_salary_yearly', 'personal_pension_savings_total', 'workplace_pension_supplement_total']].copy()
-    data_monthly_['total'] = data_monthly_['personal_pension_savings_total'] + data_monthly_['workplace_pension_supplement_total']
+    data_monthly_ = data_monthly[['net_salary_yearly', 'personal_pension_savings', 'workplace_pension_supplement']].copy()
+    data_monthly_['total'] = data_monthly['workplace_pension_supplement_total']
     data_monthly_['target'] = savings_goal
     total_saved = data_monthly_['total'].max()
 
@@ -46,7 +46,7 @@ def generate_pension_fig(data_monthly, savings_goal):
 
 def plot_bars(varexinc: pd.DataFrame, months=1):
     fig = plt.figure(figsize=(8, 8), dpi=150)
-    series = varexinc.iloc[:months, :]
+    series = varexinc.iloc[1:months+1, :]
     series.T.sort_values(by=series.index[0], ascending=False).T.plot.bar(
         ax=plt.gca()
     )

@@ -117,7 +117,7 @@ def create_app(server_):
 
         pension_fig = generate_pension_fig(data_monthly, cfg.savings_goal)
         pickle.dump(pension_fig, open(f'{DIR}/pension_fig.p', 'wb'))
-    print()
+
     app.layout = html.Div([
         # Add the plotly figure
 

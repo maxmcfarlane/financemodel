@@ -6,9 +6,13 @@ import pandas as pd
 from calculations import calculate_paid_yearly_salary, expand_yearly, calculate_yearly_series, condition_transaction_date
 import config as cfg
 
-
-def get_salary_and_tax(annual_salary: int,
-                       years_until_retirement: int,
+def get_salary_and_tax(volume: int,
+                       granularity: int,
+                       years: int,
+                       freq,
+                       annual_salary: int,
+                       pay_day: int,
+                       savings_loans_day: dict,
                        salary_increase_inflation: float,
                        promotion_frequency_years: int,
                        salary_increase_promotion: float,
@@ -20,12 +24,11 @@ def get_salary_and_tax(annual_salary: int,
                        INCOME_TAX_BANDS: dict,
                        NAT_INS_THRESH: int,
                        NAT_INS_RATE: float,
-                       PERIODS: int,
                        ) -> pd.DataFrame:
     """
 
     :param annual_salary:
-    :param years_until_retirement:
+    :param months_until_retirement:
     :param salary_increase_inflation:
     :param promotion_frequency_years:
     :param salary_increase_promotion:
@@ -37,11 +40,13 @@ def get_salary_and_tax(annual_salary: int,
     :param INCOME_TAX_BANDS:
     :param NAT_INS_THRESH:
     :param NAT_INS_RATE:
-    :param PERIODS:
+    :param MONTH_PERIODS:
     :return:
     """
+
+
     # compile series of data - annual salary until retirement
-    yearly_salary = pd.Series(np.repeat([annual_salary], years_until_retirement))
+    yearly_salary = pd.Series(np.repeat([annual_salary], math.ceil(years)))
 
     # account for inflation/salary increase, promotions, job changes and a max salary cap
     yearly_salary = calculate_yearly_series(yearly_salary,
@@ -52,10 +57,13 @@ def get_salary_and_tax(annual_salary: int,
                                             salary_decrease_role_change,
                                             max_salary)
 
-    # compile income on monthly basis, until retirement
-    yearly_salary_monthly = expand_yearly_to_monthly(yearly_salary.values, 'gross_salary_yearly',
-                                                     years_until_retirement,
-                                                     start_from)
+
+    # compile income on periodic basis, until retirement
+    salary = expand_yearly(yearly_salary.values, 'gross_salary_yearly',
+                           volume,
+                           start_from,
+                           granularity=granularity,
+                           freq=freq)
 
     # calculate paid salary based on national insurance and income tax deductions
     yearly_paid_salary = calculate_paid_yearly_salary(yearly_salary,
@@ -64,25 +72,25 @@ def get_salary_and_tax(annual_salary: int,
                                                       NAT_INS_THRESH,
                                                       NAT_INS_RATE)
 
-    monthly_salary_tax = []
+    periodic_salary_tax = []
     for idc, col in yearly_paid_salary.iteritems():
-        monthly = expand_yearly_to_monthly(col.values, idc,
-                                           years_until_retirement,
-                                           start_from)
-        monthly_salary_tax.append(monthly)
+        periodic = expand_yearly(col.values, idc,
+                                 volume,
+                                 start_from,
+                                 granularity=granularity,
+                                 freq=freq)
+        periodic_salary_tax.append(periodic)
 
-    yearly_paid_salary_monthly = pd.concat(monthly_salary_tax, axis=1)
+    yearly_paid_salary_monthly = pd.concat(periodic_salary_tax, axis=1)
 
-    data_monthly = yearly_salary_monthly.reset_index()
+    periodic_data = pd.DataFrame(salary)
 
     # wrangle monthly salary, savings contributions and prepare data for calculation total savings
-    data_monthly['income_tax_paid_yearly'] = -yearly_paid_salary_monthly['income_tax_paid_yearly'].values
-    data_monthly['nat_ins_paid_yearly'] = -yearly_paid_salary_monthly['nat_ins_paid_yearly'].values
-    data_monthly['net_salary_yearly'] = yearly_paid_salary_monthly['net_salary_yearly'].values
-    data_monthly['gross_salary'] = data_monthly['gross_salary_yearly'] / PERIODS
-    data_monthly['income_tax_paid'] = data_monthly['income_tax_paid_yearly'] / PERIODS
-    data_monthly['nat_ins_paid'] = data_monthly['nat_ins_paid_yearly'] / PERIODS
-    data_monthly['net_salary'] = data_monthly['net_salary_yearly'] / PERIODS
+    periodic_data['income_tax_paid_yearly'] = -yearly_paid_salary_monthly['income_tax_paid_yearly'].values
+    periodic_data['nat_ins_paid_yearly'] = -yearly_paid_salary_monthly['nat_ins_paid_yearly'].values
+    periodic_data['net_salary_yearly'] = yearly_paid_salary_monthly['net_salary_yearly'].values
+
+    salary_cols = cfg.SALARY_COLS + cfg.TAX_COLS
 
     for c in salary_cols:
         periodic_data[c] = periodic_data[f'{c}_yearly'] / 12

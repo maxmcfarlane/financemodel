@@ -69,13 +69,73 @@ varex_max = {
     'mum loan': -168,
 
 }
-varex_end = {
+varex_out = {
+    'rent': 1,
+    'DVLA': 3,
+    'electricity': 3,
+    'zwift': 3,
+    'crossfit': 4,
+    'google drive': 6,
+    'phone': 7,
+    'klarna': 8,
+    'specsavers': 12,
+    'mum loan': 13,
+    'pcp': 21,
+    'work phone': 21,
+    'spotify': 21,
+    'credit ladder': 23,
+    'monzo premium': 27,
+    'headspace': 27,
+    'council tax': 28,
+    'internet': 28,
+}
+varex_next_business_day = {
+    'DVLA': True,
+    'council tax': True,
+    'credit ladder': True,
+    'crossfit': True,
+    'electricity': True,
+    'google drive': True,
+    'headspace': True,
+    'internet': True,
+    'klarna': True,
+    'monzo premium': True,
+    'mum loan': True,
+    'pcp': True,
+    'phone': True,
+    'rent': True,
+    'specsavers': True,
+    'spotify': True,
+    'work phone': True,
+    'zwift': True
+}
+
+varex_start = {
     'phone': None,
     'crossfit': None,
     'rent': None,
     'DVLA': None,
     'electricity': None,
     'zwift': None,
+    'specsavers': None,
+    'pcp': None,
+    'council tax': None,
+    'internet': None,
+    'work phone': None,
+    'spotify': None,
+    'monzo premium': None,
+    'credit ladder': None,
+    'headspace': None,
+    'klarna': None,
+    'mum loan': None,
+}
+varex_end = {
+    'phone': None,
+    'crossfit': None,
+    'rent': None,
+    'DVLA': None,
+    'electricity': None,
+    'zwift': datetime.datetime(year=2023, month=2, day=2),
     'specsavers': None,
     'pcp': None,
     'council tax': None,
@@ -113,6 +173,12 @@ varinc = {
     'rebecca': 340,
     'mum loan': 170,
     'scottish power': 67,
+}
+varinc_in = {
+    'spotify': None,
+    'rebecca': 3,
+    'mum loan': 5,
+    'scottish power': 15,
 }
 varinc_end = {
     'spotify': None,

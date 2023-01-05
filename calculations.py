@@ -57,10 +57,8 @@ def calculate_yearly_series(yearly_series: pd.Series,
 
     yearly_series = yearly_series.copy()
     if inflate_max_amount:
-        max_amount_ = calculate_compound_savings(pd.Series([max_amount] * len(yearly_series), name='max_amount'), 0,
-                                                 increase_inflation, 1)
-        max_amount_['max_amount'] = max_amount_['max_amount'] + max_amount_['interest']
-        max_amount_ = max_amount_['max_amount']
+        max_amount_ = pd.Series([fv(max_amount, increase_inflation, 12, y) for y in yearly_series.index],
+                                name='max_amount')
     else:
         max_amount_ = pd.Series([max_amount] * len(yearly_series), name='max_amount')
 
@@ -94,41 +92,79 @@ def calculate_paid_yearly_salary(yearly_salary,
     return pd.DataFrame.from_records(records)
 
 
-def expand_yearly_to_monthly(values, name,
-                             years,
-                             start_
-                             ):
-    monthly = pd.Series(np.repeat(values, (12)),
+def expand_yearly(values, name,
+                  periods_until_retirement,
+                  start_,
+                  granularity,
+                  freq
+                  ):
+
+    range_ = pd.date_range(start_,
+                           start_
+                           + pd.offsets.DateOffset(years=math.ceil(periods_until_retirement / granularity)),
+                           inclusive='left',
+                           freq=freq)
+
+    if freq == 'D':
+        granularity = [365 + (1 if calendar.isleap(y) else 0) for y in range_.to_series().dt.year.unique()[:-1]]
+
+    periodic = pd.Series(np.repeat(values, (granularity)),
                                       name=name,
-                                      index=pd.date_range(start_,
-                                                          start_
-                                                          + pd.offsets.DateOffset(years=years),
-                                                          freq='m'))
-    return monthly
+                                      index=range_)
+    periodic = periodic.iloc[:periods_until_retirement]
+    return periodic
 
 
-def calculate_compound_savings(monthly_savings: pd.Series,
+def calculate_compound_savings(periodic_savings: pd.Series,
                                initial_savings,
                                interest_rate: float,
                                compounding_periods):
     # todo - account for variable interest rates
     # todo - fix compound in first period
-    name_ = monthly_savings.name
-    data_monthly = monthly_savings.reset_index().iloc[:, 1:].copy()
-    data_monthly['total_contribution'] = monthly_savings.cumsum().round(2)
-    data_monthly['total'] = data_monthly['total_contribution'] + initial_savings
-    data_monthly['interest'] = data_monthly['total'].apply(lambda v: interest_after_t_years(v, interest_rate, compounding_periods, 1 / compounding_periods))
+    name_ = periodic_savings.name
+    periodic_data = periodic_savings.reset_index(drop=False).set_index('index').copy()
+
+    if pd.infer_freq(periodic_data.index) == 'D':
+        periodic_data['m'] = periodic_data.index.to_series().dt.month
+        periodic_data['y'] = periodic_data.index.to_series().dt.year
+        data_monthly = periodic_data.groupby(['y', 'm']).sum()
+    else:
+        data_monthly = periodic_data
+
+    data_monthly['total_contribution'] = data_monthly.cumsum().round(2).values
+    data_monthly['total'] = (data_monthly['total_contribution'] + initial_savings)
+
+    data_monthly['interest'] = 0
+    data_monthly = data_monthly.reset_index()
     for idr, r in data_monthly.iterrows():
         if idr == 0:
             continue
         previous_month_end_balance = data_monthly.iloc[idr - 1, :]['total']
-        previous_month_end_balance_with_interest = after_t_years(previous_month_end_balance, interest_rate, compounding_periods, 1 / compounding_periods)
+        previous_month_end_balance_with_interest = after_t_years(previous_month_end_balance, interest_rate,
+                                                                 compounding_periods, 1 / compounding_periods)
         interest = previous_month_end_balance_with_interest - previous_month_end_balance
         data_monthly.iloc[idr - 1, data_monthly.columns.get_loc('total')] = previous_month_end_balance_with_interest
         data_monthly.iloc[idr, data_monthly.columns.get_loc('total')] = previous_month_end_balance_with_interest + \
                                                                         r[name_]
         data_monthly.iloc[idr, data_monthly.columns.get_loc('interest')] = interest
-    return data_monthly
+    data_monthly['cum_interest'] = data_monthly['interest'].cumsum()
+
+    if pd.infer_freq(periodic_data.index) == 'D':
+        data_monthly['index'] = data_monthly.apply(lambda r: datetime.datetime(year=int(r['y']), month=int(r['m']), day=28), axis=1)
+        data_monthly['dim'] = data_monthly['index'].dt.daysinmonth
+        data_monthly['index'] = data_monthly.apply(lambda r: r['index'].replace(day=r['dim']), axis=1)
+        data_monthly = data_monthly.drop(columns=['dim'])
+
+        periodic_data = periodic_data.drop(columns=['y', 'm'])
+        periodic_data['total_contribution'] = periodic_data.cumsum().round(2).values
+        periodic_data['total'] = (periodic_data['total_contribution'] + initial_savings)
+
+        periodic_data = periodic_data.merge(data_monthly.set_index('index')[['interest']], how='left',
+                                            left_index=True, right_index=True)
+        periodic_data['interest'] = periodic_data['interest'].fillna(0)
+        periodic_data['total'] = (periodic_savings + periodic_data['interest']).cumsum()
+
+    return periodic_data
 
 
 def calculate_national_insurance(national_insurance_band, annual_salary, national_insurance_rate):
