@@ -157,7 +157,7 @@ varex_start = {
     'pcp': None,
     'council tax': None,
     'internet': None,
-    'car insurance': None,
+    'car insurance': datetime.datetime(year=2023, month=10, day=1),
     'work phone': None,
     'spotify premium': None,
     'monzo premium': None,

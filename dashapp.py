@@ -1,10 +1,19 @@
-import dash.dependencies
+import os
+import pickle
+import datetime
 
-import main
-from plot import *
-import config as cfg
-import ui_config as uicfg
+import dash.dependencies
+import dash_bootstrap_components as dbc
 import dash_table
+import pandas as pd
+from dash import dcc
+from dash import html
+
+import config as cfg
+import main
+import plot
+import savings_loans as snl
+import ui_config as uicfg
 
 external_stylesheets = [dbc.themes.BOOTSTRAP]
 
@@ -99,6 +108,105 @@ def create_interest_sliders(assume_inflation):
     ]
 
 
+def setting_(id, label='Setting [units]:', disabled=False) -> list:
+    settings_comp = [
+        dbc.Container(dbc.Tooltip('This feature has not been implemented yet.', target=f'{id}-input-card'))
+    ] if disabled else []
+
+    settings_comp.append(
+        dbc.Container([
+            dbc.Card([
+                dbc.CardHeader([
+                    html.H5(label),
+                ]),
+                dbc.CardBody([
+                    dbc.Row([
+                        dbc.Col([
+                            dbc.Row([
+                                dbc.Col(
+                                    dcc.Input(id=f'{id}-input',
+                                              type='text',
+                                              value=f'',
+                                              placeholder='',
+                                              debounce=True,
+                                              disabled=disabled,
+                                              style={'width': '100%'}),
+                                    width=12,
+                                ),
+                            ], justify='center'),
+                        ], width=12),
+                    ]),
+
+                ]),
+                dbc.CardHeader(),
+            ], id=f'{id}-input-card')
+        ])
+    )
+    return settings_comp
+
+
+def datetime_picker_setting_(id, label='Setting [units]:', disabled=False) -> list:
+    settings_comp = [
+        dbc.Container(dbc.Tooltip('This feature has not been implemented yet.', target=f'{id}-input-card'))
+    ] if disabled else []
+
+    settings_comp.append(
+        dbc.Container([
+            dbc.Card([
+                dbc.CardHeader([
+                    html.H5(label),
+                ]),
+                dbc.CardBody([
+                    dbc.Row([
+                        dbc.Col([
+                            dbc.Row([
+                                dbc.Col(
+                                    dcc.DatePickerRange(
+                                        id=id,
+                                        display_format="DD/MM/YY",
+                                        min_date_allowed=cfg.birthday,
+                                        max_date_allowed=cfg.retirement_date,
+                                        # initial_visible_month=cfg.to_date,
+                                        start_date=cfg.from_date,
+                                        end_date=cfg.to_date
+                                    ),
+                                    width=12,
+                                ),
+                            ], justify='center'),
+                        ], width=12),
+                    ]),
+
+                ]),
+                dbc.CardHeader(),
+            ], id=f'{id}-input-card')
+        ])
+    )
+    return settings_comp
+
+
+def col_(children, width=6):
+    return dbc.Col(children=children, xs=12, sm=12, md=12, lg=width, xl=width, xxl=width, style={'padding-top': f'1vh'})
+
+
+def full_col_(children):
+    width = 12
+    return col_(children, width=width)
+
+
+def half_col_(children):
+    width = 6
+    return col_(children, width=width)
+
+
+def row_(children):
+    return dbc.Row(children=children,
+                   style={'height': f'auto', 'width': '100%', 'padding-top': '1vh',
+                          # 'display': 'block',
+                          # 'margin-left': 'auto',
+                          # 'margin-right': 'auto',
+                          })
+
+
 def create_app(server_):
     app = dash.Dash(__name__,
                     title='name',
@@ -112,19 +220,28 @@ def create_app(server_):
 
     DIR = os.path.dirname(__file__)
 
-
     if not os.path.exists('./cache.p'):
-        daily, monthly, _, _, _, \
-        periodic_salary_tax_data_monthly, _, _ = main.generate_table_data()
+        periodic_salary_tax_saving_loan_data, periodic_salary_tax_data_monthly, years = main.generate_table_data()
 
-        pension_fig = generate_pension_fig(periodic_salary_tax_data_monthly, cfg.savings_goal)
-        balance_fig = generate_balance_fig(daily, monthly, cfg.balance)
+        daily, monthly, _, _, _, _, _, _ = \
+            main.generate_with_varinvex(periodic_salary_tax_saving_loan_data, years)
+
+        pension_fig = plot.generate_pension_fig(periodic_salary_tax_data_monthly, cfg.pension_goal)
+        balance_fig = plot.generate_balance_fig(daily, monthly, cfg.balance,
+                                                cfg.from_date,
+                                                cfg.to_date)
+        loan_fig, _ = plot.generate_loan_figs(periodic_salary_tax_saving_loan_data[snl.get_loans()],
+                                              periodic_salary_tax_saving_loan_data[snl.get_loan_totals()])
+        savings_fig, _ = plot.generate_savings_figs(periodic_salary_tax_saving_loan_data[snl.get_savings()],
+                                                    periodic_salary_tax_saving_loan_data[snl.get_savings_totals()])
 
         pickle.dump((
             pension_fig,
             daily, monthly,
             periodic_salary_tax_data_monthly,
             balance_fig,
+            loan_fig,
+            savings_fig,
         ), open('./cache.p', 'wb'))
     else:
         (
@@ -132,27 +249,54 @@ def create_app(server_):
             daily, monthly,
             periodic_salary_tax_data_monthly,
             balance_fig,
+            loan_fig,
+            savings_fig,
         ) = pickle.load(open('./cache.p', 'rb'))
 
     app.layout = html.Div([
         # Add the plotly figure
 
-        dbc.Row([
-            dbc.Col([
-                dcc.Graph(figure=pension_fig,
-                          id='pension_fig',
-                          style={'height': f'{int(graph_height)}vh', 'width': '100%'}),
+        row_([
+            col_(
+                datetime_picker_setting_('date_range-picker', 'Date range', disabled=False),
+                width=4
+            ),
+        ]),
+        row_([
+            half_col_([
+                dbc.Spinner([
+                    dcc.Graph(figure=pension_fig,
+                              id='pension_fig',
+                              style={'height': f'{int(graph_height)}vh', 'width': '100%'}),
+                ])
             ]),
-            dbc.Col([
-                dcc.Graph(figure=balance_fig,
-                          id='balance_fig',
-                          style={'height': f'{int(graph_height)}vh', 'width': '100%'}),
+            half_col_([
+                dbc.Spinner([
+                    dcc.Graph(figure=balance_fig,
+                              id='balance_fig',
+                              style={'height': f'{int(graph_height)}vh', 'width': '100%'}),
+                ])
             ])
         ]),
-        dbc.Container([
-            dbc.Row([
-                dbc.Col([
-
+        row_([
+            half_col_([
+                dbc.Spinner([
+                    dcc.Graph(figure=savings_fig,
+                              id='savings_fig',
+                              style={'height': f'{int(graph_height)}vh', 'width': '100%'}),
+                ])
+            ]),
+            half_col_([
+                dbc.Spinner([
+                    dcc.Graph(figure=loan_fig,
+                              id='loan_fig',
+                              style={'height': f'{int(graph_height)}vh', 'width': '100%'}),
+                ])
+            ])
+        ]),
+        row_([
+            half_col_([
+                dbc.Container([
                     dbc.Card([
                         dbc.CardHeader([
                             dbc.Row([
@@ -182,8 +326,10 @@ def create_app(server_):
                         ]),
                         dbc.CardHeader(),
                     ]),
-                ], xs=12, sm=12, md=12, lg=6, xl=6, xxl=6, style={'padding-top': f'{settings_pad}vh'}),
-                dbc.Col([
+                ])
+            ]),
+            half_col_([
+                dbc.Container([
                     dbc.Card([
                         dbc.CardHeader([
                             html.H5('Savings [%]:'),
@@ -194,16 +340,35 @@ def create_app(server_):
                                     html.Div([
                                         left_label(
                                             dbc.Spinner(
-                                                dcc.Slider(id='savings_factor-slider',
+                                                dcc.Slider(id='house_savings_factor-slider',
                                                            min=0,
                                                            max=max(list(percentage_savings_rate_marks.keys())),
                                                            step=0.001,
-                                                           value=cfg.savings_factor,
+                                                           value=snl.cost_factors['house_savings'],
                                                            marks=percentage_savings_rate_marks,
                                                            className='slider',
-                                                           tooltip=tooltip_marks('savings_factor')),
+                                                           tooltip=tooltip_marks('house_savings')),
                                             ),
-                                            'savings_factor',
+                                            'house_savings',
+                                        )
+                                    ])
+                                ], xs=12, sm=12, md=12, lg=12, xl=12, xxl=12),
+                            ]),
+                            dbc.Row([
+                                dbc.Col([
+                                    html.Div([
+                                        left_label(
+                                            dbc.Spinner(
+                                                dcc.Slider(id='personal_pension_savings_factor-slider',
+                                                           min=0,
+                                                           max=max(list(percentage_savings_rate_marks.keys())),
+                                                           step=0.001,
+                                                           value=snl.cost_factors['personal_pension_savings'],
+                                                           marks=percentage_savings_rate_marks,
+                                                           className='slider',
+                                                           tooltip=tooltip_marks('personal_pension_savings')),
+                                            ),
+                                            'personal_pension_savings',
                                         )
                                     ])
                                 ], xs=12, sm=12, md=12, lg=12, xl=12, xxl=12),
@@ -212,91 +377,71 @@ def create_app(server_):
                         ]),
                         dbc.CardHeader(),
                     ]),
-                ], xs=12, sm=12, md=12, lg=6, xl=6, xxl=6, style={'padding-top': f'{settings_pad}vh'})
-            ]),
-            dbc.Row([
-                dbc.Col([
-                    dbc.Card([
-                        dbc.CardHeader([
-                            html.H5('Setting [units]:'),
-                        ]),
-                        dbc.Tooltip('This feature has not been implemented yet.', target='centre-column'),
-                        dbc.CardBody([
-                            dbc.Row([
-                                dbc.Col([
-                                    dbc.Row([
-                                        dbc.Col(
-                                            dcc.Input(id='setting1-input',
-                                                      type='text',
-                                                      disabled=True,
-                                                      value=f'',
-                                                      placeholder='',
-                                                      debounce=True,
-                                                      style={'width': '100%'}),
-                                            width=12,
-                                        ),
-                                    ], justify='center'),
-                                ], width=12, id='centre-column'),
-                            ]),
-
-                        ]),
-                        dbc.CardHeader(),
-                    ]),
-                ], xs=12, sm=12, md=12, lg=6, xl=6, xxl=6, style={'padding-top': f'{settings_pad}vh'}),
-                dbc.Col([
-                    dbc.Tooltip('This feature has not been implemented yet.', target='target-card'),
-                    dbc.Card([
-                        dbc.CardHeader([
-                            html.H5('Setting [units]:'),
-                        ]),
-                        dbc.CardBody([
-                            dbc.Row([
-                                dbc.Col([
-                                    dbc.Row([
-                                        dbc.Col(
-                                            dcc.Input(id='setting2-input',
-                                                      type='text',
-                                                      value=f'',
-                                                      placeholder='',
-                                                      debounce=True,
-                                                      disabled=True,
-                                                      style={'width': '100%'}),
-                                            width=12,
-                                        ),
-                                    ], justify='center'),
-                                ], width=12),
-                            ]),
-
-                        ]),
-                        dbc.CardHeader(),
-                    ], id='setting2-input-card'),
-                ], xs=12, sm=12, md=12, lg=6, xl=6, xxl=6, style={'padding-top': f'{settings_pad}vh'}),
-            ])
-        ], style={'height': f'{100 - int(graph_height) - int(2 * settings_pad)}vh', 'width': '100%',
-                  'padding-top': f'{settings_pad}vh'}),
-        dbc.Row([
-            dbc.Col([
-                dbc.Card([
-                    html.Div([
-                        dash_table.DataTable(
-                            id='table',
-                            columns=[{"name": i, "id": i} for i in daily.reset_index().columns],
-                            data=daily.iloc[:365, :].reset_index().to_dict('records'),
-                            # style_table={
-                            #     'maxHeight': '75vh',
-                            #     'maxWidth': '75vw',
-                            #     'overflowY': 'scroll'
-                            # }
-                        )
-                    ])
-                    # dbc.Table.from_dataframe(daily.iloc[:365, :].reset_index())
-                ], style={
-                        'height': '75vh',
-                        'width': '75vw',
-                        'overflowY': 'scroll'
-                    })
+                ])
             ])
         ]),
+
+        row_([
+            half_col_(
+                setting_('settings1', disabled=True)
+            ),
+            half_col_(
+                setting_('settings2', disabled=True)
+            )
+        ]),
+        row_([
+            full_col_([
+                dbc.Container([
+                    dbc.Card([
+                        dbc.CardHeader([
+
+                        ]),
+                        dbc.CardBody([
+                            dash_table.DataTable(
+                                id='table',
+                                columns=[{"name": i, "id": i} for i in daily.reset_index().columns],
+                                data=daily.iloc[:365, :].reset_index().to_dict('records'),
+                                # style_table={
+                                #     'maxHeight': '75vh',
+                                #     'maxWidth': '75vw',
+                                #     'overflowY': 'scroll'
+                                # }
+                            )
+                        ], style={
+                            'height': '100%',
+                            # 'marginLeft': 'auto', 'marginRight': 'auto',
+                            # 'margin': '0px',
+                            'width': '100%',
+                            'overflowY': 'scroll'
+                        }),
+                        # dbc.Table.from_dataframe(daily.iloc[:365, :].reset_index())
+                    ], style={
+                        'height': '75vh',
+                        # 'marginLeft': 'auto', 'marginRight': 'auto',
+                        'width': '100%',
+                        # 'margin': '0px',
+                    },
+                        id='table_card')
+                ])
+            ]),
+        ]),
+        # dbc.Row([
+        #     dbc.Col([
+        #
+        #     ], style={
+        #                 # 'height': '75vh',
+        #                 # 'marginLeft': 'auto', 'marginRight': 'auto',
+        #                 'width': '75vw',
+        #                 # 'margin': '0px',
+        #             })
+        # ],
+        #     style={
+        #         'display': 'block',
+        #         'margin-left': 'auto',
+        #         'margin-right': 'auto',
+        #         'width': '40%',
+        #     },
+        #     justify="center"),
 
     ], style={'height': '100vh', 'width': '98vw'}
     )
@@ -317,7 +462,10 @@ def create_app(server_):
             dash.dependencies.Input('varex_varin_increase_inflation-slider', 'value'),
             dash.dependencies.Input('inflation-checkbox', 'value'),
 
-            dash.dependencies.Input('savings_factor-slider', 'value'),
+            dash.dependencies.Input('house_savings_factor-slider', 'value'),
+            dash.dependencies.Input('personal_pension_savings_factor-slider', 'value'),
+            dash.dependencies.Input('date_range-picker', 'start_date'),
+            dash.dependencies.Input('date_range-picker', 'end_date'),
 
         ],
         [
@@ -334,7 +482,10 @@ def create_app(server_):
             salary_increase_inflation_,
             varex_varin_increase_inflation_,
             assume_inflation,
-            savings_factor,
+            house_savings_factor,
+            personal_pension_savings_factor,
+            from_date_,
+            to_date_,
             pension_fig,
             balance_fig,
             interest_sliders):
@@ -343,26 +494,35 @@ def create_app(server_):
 
         assume_inflation = 'interest' in assume_inflation
         if dash.callback_context.triggered_id == 'inflation-slider' or \
-                        dash.callback_context.triggered_id == 'promotion_frequency_years-slider' or \
-                        dash.callback_context.triggered_id == 'savings_factor-slider' or \
-                        (dash.callback_context.triggered_id == 'interest_rate-slider' and not assume_inflation) or \
-                        (
-                                dash.callback_context.triggered_id == 'salary_increase_inflation-slider' and not assume_inflation) or \
-                        (
-                                dash.callback_context.triggered_id == 'varex_varin_increase_inflation-slider' and not assume_inflation):
+                dash.callback_context.triggered_id == 'promotion_frequency_years-slider' or \
+                dash.callback_context.triggered_id == 'house_savings_factor-slider' or \
+                dash.callback_context.triggered_id == 'personal_pension_savings_factor-slider' or \
+                dash.callback_context.triggered_id == 'date_range-picker' or \
+                (dash.callback_context.triggered_id == 'interest_rate-slider' and not assume_inflation) or \
+                (
+                        dash.callback_context.triggered_id == 'salary_increase_inflation-slider' and not assume_inflation) or \
+                (
+                        dash.callback_context.triggered_id == 'varex_varin_increase_inflation-slider' and not assume_inflation):
 
             cfg.set_inflation_rate(inflation_rate_,
                                    interest_rate_,
                                    salary_increase_inflation_,
                                    varex_varin_increase_inflation_, assume_inflation)
             cfg.set_promotion_rate(promotion_frequency_years_)
-            cfg.set_savings_factor(savings_factor)
+            cfg.set_from_date(pd.to_datetime(from_date_))
+            cfg.set_to_date(pd.to_datetime(to_date_))
+            snl.set_cost_factor('house_savings_factor-slider', house_savings_factor)
+            snl.set_cost_factor('personal_pension_savings_factor-slider', personal_pension_savings_factor)
 
-            daily, monthly, _, _, _, \
-            periodic_salary_tax_data_monthly, _, _ = main.generate_table_data()
+            periodic_salary_tax_saving_loan_data, periodic_salary_tax_data_monthly, years = main.generate_table_data()
 
-            balance_fig = generate_balance_fig(daily, monthly, cfg.balance)
-            pension_fig = generate_pension_fig(periodic_salary_tax_data_monthly, cfg.savings_goal)
+            daily, monthly, _, _, _, _, _, _ = \
+                main.generate_with_varinvex(periodic_salary_tax_saving_loan_data, years)
+
+            balance_fig = plot.generate_balance_fig(daily, monthly, cfg.balance,
+                                                    cfg.from_date,
+                                                    cfg.to_date)
+            pension_fig = plot.generate_pension_fig(periodic_salary_tax_data_monthly, cfg.pension_goal)
         elif dash.callback_context.triggered_id == 'inflation-checkbox':
             cfg.set_inflation_rate(inflation_rate_,
                                    interest_rate_,
@@ -370,9 +530,9 @@ def create_app(server_):
                                    varex_varin_increase_inflation_, assume_inflation)
             interest_sliders = create_interest_sliders(assume_inflation)
             if assume_inflation:
-                daily, monthly, _, _, _, \
-                periodic_salary_tax_data_monthly, _, _ = main.generate_table_data()
-                pension_fig = generate_pension_fig(periodic_salary_tax_data_monthly, cfg.savings_goal)
+                periodic_salary_tax_saving_loan_data, periodic_salary_tax_data_monthly, years = main.generate_table_data()
+
+                pension_fig = plot.generate_pension_fig(periodic_salary_tax_data_monthly, cfg.pension_goal)
 
         return [pension_fig, balance_fig, inflation_rate_, interest_sliders]
 

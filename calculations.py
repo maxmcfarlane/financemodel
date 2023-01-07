@@ -13,6 +13,7 @@ import numpy as np
 import math
 import holidays
 import datetime
+import warnings
 
 import calendar
 
@@ -53,7 +54,6 @@ def calculate_yearly_series(yearly_series: pd.Series,
     :param inflate_max_amount: True will inflate values to Future Value, assuming maximum value is set as NPV
     :return:
     """
-
 
     yearly_series = yearly_series.copy()
     if inflate_max_amount:
@@ -106,11 +106,16 @@ def expand_yearly(values, name,
                            freq=freq)
 
     if freq == 'D':
-        granularity = [365 + (1 if calendar.isleap(y) else 0) for y in range_.to_series().dt.year.unique()]
+        granularity = [365 + (1 if calendar.isleap(y) else 0) for y in range_.to_series().dt.year.unique()][:len(values)]
 
-    periodic = pd.Series(np.repeat(values, (granularity)),
-                                      name=name,
-                                      index=range_)
+    try:
+        periodic = pd.Series(np.repeat(values, (granularity)),
+                                          name=name,
+                                          index=range_)
+    except Exception as e:
+        warnings.warn('expand_yearly')
+        raise e
+
     periodic = periodic.iloc[:periods_until_retirement]
     return periodic
 
@@ -140,8 +145,8 @@ def calculate_compound_savings(periodic_savings: pd.Series,
         if idr == 0:
             continue
         previous_month_end_balance = data_monthly.iloc[idr - 1, :]['total']
-        previous_month_end_balance_with_interest = after_t_years(previous_month_end_balance, interest_rate,
-                                                                 compounding_periods, 1 / compounding_periods)
+        previous_month_end_balance_with_interest = after_t_periods(previous_month_end_balance, interest_rate,
+                                                                   compounding_periods, t=1)
         interest = previous_month_end_balance_with_interest - previous_month_end_balance
         data_monthly.iloc[idr - 1, data_monthly.columns.get_loc('total')] = previous_month_end_balance_with_interest
         data_monthly.iloc[idr, data_monthly.columns.get_loc('total')] = previous_month_end_balance_with_interest + \
@@ -162,7 +167,7 @@ def calculate_compound_savings(periodic_savings: pd.Series,
         periodic_data = periodic_data.merge(data_monthly.set_index('index')[['interest']], how='left',
                                             left_index=True, right_index=True)
         periodic_data['interest'] = periodic_data['interest'].fillna(0)
-        periodic_data['total'] = (periodic_savings + periodic_data['interest']).cumsum()
+        periodic_data['total'] = (periodic_savings + periodic_data['interest']).cumsum() + initial_savings
 
     return periodic_data
 
@@ -195,8 +200,8 @@ def fv(c, r, p, t):
     return c * (pow((1 + r / p), p * t))
 
 
-def after_t_years(initial_investment, interest_rate_per_year, periods, years):
-    return initial_investment * (pow((1 + interest_rate_per_year / periods), periods * years))
+def after_t_periods(initial_investment, interest_rate_per_year, periods, t):
+    return initial_investment * (pow((1 + interest_rate_per_year / periods), t))
 
 
 def interest_after_t_years(initial_investment, interest_rate_per_year, periods, years):

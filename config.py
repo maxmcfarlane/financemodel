@@ -1,9 +1,10 @@
 import datetime
-import os
-import pandas as pd
-import enum
 import math
-from calculations import diff_month
+import os
+
+import pandas as pd
+
+from calculations import diff_month, get_previous_business_day
 
 DIR = os.path.dirname(__file__)
 
@@ -16,7 +17,9 @@ birthday = datetime.datetime(year=2022, month=11, day=10)
 country = 'Scotland'
 
 # as_of = datetime.datetime(year=2022, month=12, day=29)
-start_from = datetime.datetime(year=2023, month=1, day=1, hour=1)
+# start_from = datetime.datetime(year=2023, month=1, day=1, hour=1)
+start_from = {'year': 2022, 'month': 12, 'day': 24, 'prev_business_day': True}
+end_on = {'year': 2025, 'month': 12, 'day': 28, 'prev_business_day': True}
 balance = 1289.24
 annual_salary = 42000  # Annual salary of the user
 pay_day = 24
@@ -24,77 +27,9 @@ savings_factor = 0.114
 
 monthly_daily = False
 
-savings_loans = [
-    'workplace_pension',
-    'student_loan',
-    'healthcare_offset_loan',
-    'underpaid_tax_loan',
-    'personal_pension_savings',
-    'house_savings',
-    'workplace_pension_supplement',
-]
-
-savings_loans_source = {
-    'workplace_pension': 'gross_salary',
-    'student_loan': 'gross_salary',
-    'healthcare_offset_loan': 'gross_salary',
-    'underpaid_tax_loan': 'gross_salary',
-    'personal_pension_savings': 'net_salary',
-    'house_savings': 'net_salary',
-    'workplace_pension_supplement': 'gross_salary',
-}
-
-savings_loans_type = {
-    'workplace_pension': 'savings',
-    'student_loan': 'loan',
-    'healthcare_offset_loan': 'loan',
-    'underpaid_tax_loan': 'loan',
-    'personal_pension_savings': 'savings',
-    'house_savings': 'savings',
-    'workplace_pension_supplement': 'aggregated_savings',
-}
-
-savings_loans_day = {
-    'workplace_pension': pay_day,
-    'student_loan': pay_day,
-    'healthcare_offset_loan': pay_day,
-    'underpaid_tax_loan': pay_day,
-    'personal_pension_savings': pay_day+1,
-    'house_savings': pay_day+1,
-    'workplace_pension_supplement': pay_day,
-}
-
-initial_balances = {
-    'workplace_pension': 0,
-    'student_loan': 120 * 12 * 3,
-    'healthcare_offset_loan': 0,
-    'underpaid_tax_loan': 0,
-    'personal_pension_savings': 0,
-    'house_savings': 10000,
-    'workplace_pension_supplement': 912 * 2
-}
-
-savings_cost_factors = {
-    'workplace_pension': 0.028,
-    'student_loan': 0.0362,
-    'healthcare_offset_loan': 343.30/42000,
-    'underpaid_tax_loan': 151.4025/(42000/12),
-    'workplace_pension_supplement': 0.07,  # at workplace_pension_supplement_limit = 3.5%
-
-    'house_savings': savings_factor/2,  # 0.114/2
-    'personal_pension_savings': savings_factor/2,  # 0.114/2
-}
-
-# retirement_age = 65  # Age at which the user wants to retire
-retirement_age = 30  # Age at which the user wants to retire
-savings_goal = 1e6  # Savings goal for retirement
-
-workplace_pension_supplement_limit = 0.035
-
-#
-savings_cost_factors['workplace_pension_supplement'] = savings_cost_factors['workplace_pension'] + \
-                                                    min([savings_cost_factors['workplace_pension']*2,
-                                                         savings_cost_factors['workplace_pension_supplement']])
+retirement_age = 65  # Age at which the user wants to retire
+# retirement_age = 30  # Age at which the user wants to retire
+pension_goal = 1e6  # Savings goal for retirement
 
 # default inputs
 # inflation_rate = 0
@@ -139,17 +74,7 @@ def set_promotion_rate(
     global promotion_frequency_years
     promotion_frequency_years = promotion_frequency_years_
 
-def set_savings_factor(
-        savings_factor_,
-):
-    global savings_factor, savings_cost_factors
-    savings_factor = savings_factor_
-    savings_cost_factors.update(
-        {
-            'house_savings': savings_factor / 2,  # 0.114/2
-            'personal_pension_savings': savings_factor / 2,  # 0.114/2
-        }
-    )
+
 
 
 # salary_increase_promotion = 0
@@ -197,24 +122,39 @@ else:
         150: 0.41
     }
 
+from_date = datetime.datetime(year=start_from['year'], month=start_from['month'], day=start_from['month'])
+to_date = datetime.datetime(year=end_on['year'], month=end_on['month'], day=end_on['month'])
+
+if start_from['prev_business_day']:
+    from_date = get_previous_business_day(from_date)
+if end_on['prev_business_day']:
+    to_date = get_previous_business_day(to_date)
+
 # calculated configurations
 bands_order = list(INCOME_TAX_BANDS.keys())
-current_age = age_at_time_of_writing + math.floor((start_from - birthday).days / 365)
+current_age = age_at_time_of_writing + math.floor((from_date - birthday).days / 365)
 
 years_until_retirement = retirement_age - current_age
-
-
 months_until_retirement = diff_month(
     birthday + pd.offsets.DateOffset(years=retirement_age - age_at_time_of_writing),
-    start_from
+    from_date
 )
 days_until_retirement = (birthday + pd.offsets.DateOffset(years=retirement_age - age_at_time_of_writing) -
-                         start_from).days + 1
+                         from_date).days + 1
+
+retirement_date = birthday + datetime.timedelta(days=days_until_retirement)
+
+days_until_end = (to_date - from_date).days + 1
 
 
-def get_savings():
-    return list([k for k, v in savings_loans_type.items() if v == 'savings'])
+def set_from_date(from_date_):
+    global from_date, days_until_end
+    from_date = from_date_
+    days_until_end = (to_date - from_date).days + 1
 
 
-def get_loans():
-    return list([k for k, v in savings_loans_type.items() if v == 'loan'])
+def set_to_date(to_date_):
+    global to_date, days_until_end
+    to_date = to_date_
+    days_until_end = (to_date - from_date).days + 1
+

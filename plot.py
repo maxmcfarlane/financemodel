@@ -1,21 +1,54 @@
-import pandas as pd
-import matplotlib.pyplot as plt
-from matplotlib.offsetbox import AnchoredText
 import datetime
-from dash import html
-from dash import dcc
-import pickle
-import plotly.graph_objects as go
-import os
-import dash_bootstrap_components as dbc
-import main as m
-import plotly.figure_factory as ff
-import plotly.express as px
 
-def plot_pension(data_monthly, savings_goal):
+import matplotlib.pyplot as plt
+import pandas as pd
+import plotly.express as px
+from matplotlib.offsetbox import AnchoredText
+
+
+def generate_loan_figs(loans, totals):
     # wrangle outputs for plotting
-    data_monthly_ = data_monthly[['net_salary_yearly', 'personal_pension_savings', 'workplace_pension_supplement']].copy()
-    data_monthly_['total'] = data_monthly['workplace_pension_supplement_total']
+    totals_ = (-1 * (totals.clip(upper=0)))
+    totals_.plot()
+    plt.title('Loan totals')
+    plt.show()
+
+    loans_ = (-loans).drop_duplicates()
+    loans_.plot.bar()
+    plt.title('Repayments')
+
+    # plt.show()
+
+    fig_totals = px.scatter(totals_)
+
+    fig_repayments = px.bar(loans_)
+
+    return fig_totals, fig_repayments
+
+
+def generate_savings_figs(savings, totals):
+    # wrangle outputs for plotting
+    totals.plot()
+    plt.title('Savings totals')
+    plt.show()
+
+    savings_ = (-savings).drop_duplicates()
+    savings_.plot.bar()
+    plt.title('Payments')
+
+    # plt.show()
+
+    fig_totals = px.scatter(totals)
+
+    fig_payments = px.bar(savings_)
+
+    return fig_totals, fig_payments
+
+
+def generate_pension_fig(data_monthly, savings_goal):
+    data_monthly_ = data_monthly[['personal_pension_savings_total', 'workplace_pension_supplement_total']].copy()
+    data_monthly_ = abs(data_monthly_)
+    data_monthly_['total'] = data_monthly_.sum(axis=1)
     data_monthly_['target'] = savings_goal
     total_saved = data_monthly_['total'].max()
 
@@ -23,22 +56,17 @@ def plot_pension(data_monthly, savings_goal):
     # plot and annotate outputs
     data_monthly_.plot()
     ax = plt.gca()
+    range_ = abs(data_monthly[['personal_pension_savings', 'workplace_pension']].sum(axis=1).loc[data_monthly[['personal_pension_savings', 'workplace_pension']].sum(axis=1)!=0])
     at = AnchoredText(
         '\n'.join([
             f"£{round(total_saved, 2):,}",
-            f"£{-data_monthly['personal_pension_savings'].max().round(2)} to £{-data_monthly['personal_pension_savings'].min().round(2)} per month",
-        ]), prop=dict(size=12), frameon=True, loc='upper center')
+            f"£{round(range_.min(), 2)} to £{round(range_.max(), 2)} per month",
+        ]), prop=dict(size=12), frameon=True, loc='upper left')
     at.patch.set_boxstyle("round,pad=0.,rounding_size=0.2")
     ax.add_artist(at)
     plt.title('Pension savings')
+    plt.legend(data_monthly_.columns.to_list(), loc='lower right')
     plt.show()
-
-def generate_pension_fig(data_monthly, savings_goal):
-    # wrangle outputs for plotting
-    data_monthly_ = data_monthly[['net_salary_yearly', 'personal_pension_savings', 'workplace_pension_supplement']].copy()
-    data_monthly_['total'] = data_monthly['workplace_pension_supplement_total']
-    data_monthly_['target'] = savings_goal
-    total_saved = data_monthly_['total'].max()
 
     fig = px.line(data_monthly_)
     # fig.show()

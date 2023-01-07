@@ -19,7 +19,7 @@ def get_salary_and_tax(volume: int,
                        role_change_frequency_years: int,
                        salary_decrease_role_change: float,
                        max_salary: int,
-                       start_from: datetime,
+                       from_date: datetime,
                        bands_order: list,
                        INCOME_TAX_BANDS: dict,
                        NAT_INS_THRESH: int,
@@ -35,7 +35,7 @@ def get_salary_and_tax(volume: int,
     :param role_change_frequency_years:
     :param salary_decrease_role_change:
     :param max_salary:
-    :param start_from:
+    :param from_date:
     :param bands_order:
     :param INCOME_TAX_BANDS:
     :param NAT_INS_THRESH:
@@ -61,7 +61,7 @@ def get_salary_and_tax(volume: int,
     # compile income on periodic basis, until retirement
     salary = expand_yearly(yearly_salary.values, 'gross_salary_yearly',
                            volume,
-                           start_from,
+                           from_date,
                            granularity=granularity,
                            freq=freq)
 
@@ -76,7 +76,7 @@ def get_salary_and_tax(volume: int,
     for idc, col in yearly_paid_salary.iteritems():
         periodic = expand_yearly(col.values, idc,
                                  volume,
-                                 start_from,
+                                 from_date,
                                  granularity=granularity,
                                  freq=freq)
         periodic_salary_tax.append(periodic)

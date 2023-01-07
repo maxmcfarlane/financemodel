@@ -6,45 +6,82 @@ import pandas as pd
 from calculations import expand_yearly, calculate_yearly_series, calculate_compound_savings, condition_transaction_date
 
 
-def get_compounding_exp(cases,
-                        interest_rate,
-                        COMPOUNDING_PERIODS,
-                        ):
+def get_compounding_exp_cases(cases,
+                              interest_rate,
+                              COMPOUNDING_PERIODS,
+                              ):
     # todo - implement series factor i.e. proportion of savings will likely increase with increase in overall salary
     periodic_data = pd.DataFrame()
     for case in cases:
-        target = case.get('target', None)
+        name = case.get('name', None)
         source = case.get('source', None)
-        diff = case.get('diff', None)
-        factor = case.get('factor', None)
-        initial = case.get('initial', None)
+        diff = case.get('diff', None) if case.get('diff', None) is not None else 0
+        factor = case.get('factor', None) if case.get('factor', None) is not None else 0
+        initial = case.get('initial', None) if case.get('initial', None) is not None else 0
+        interest = case.get('interest', interest_rate)
+        interest = interest_rate if isinstance(interest, bool) and interest \
+            else interest if interest else 0
 
-        periodic_data[target] = source * factor
+        periodic_data[name] = source * factor
+
         if diff is not None:
-            periodic_data[target] = periodic_data[target] - diff
-        total = calculate_compound_savings(periodic_data[target], initial, interest_rate, COMPOUNDING_PERIODS)
-        periodic_data[f'{target}_total'] = total['total']
-        periodic_data[target] = -total[target]
+            periodic_data[name] = periodic_data[name] - diff
+
+        total = calculate_compound_savings(periodic_data[name], initial, interest, COMPOUNDING_PERIODS)
+        periodic_data[f'{name}_interest'] = total['interest']
+        periodic_data[f'{name}_total'] = total['total']
+        periodic_data[name] = -total[name]
 
     return periodic_data
 
-    # data_monthly['personal_pension_savings'] = data_monthly['net_salary'] * save_factor
-    # data_monthly['student_loan'] = data_monthly['net_salary'] * student_loan_factor
-    # data_monthly['workplace_pension'] = data_monthly['gross_salary'] * workplace_pension_amount
-    # data_monthly['workplace_pension_combined'] = data_monthly['gross_salary'] * (workplace_pension_amount \
-    #                                                                        + employer_pension_contribution *
-    #                                                                        (workplace_pension_amount / 0.035))
-    #
-    # # calculate total compound savings based on constant interest rate
-    # for c, initial in [('personal_pension_savings', initial_personal_savings),
-    #                    ('student_loan', initial_student_loan_paid),
-    #                    ('workplace_pension', 0),
-    #                    ('workplace_pension_combined', initial_workplace_pension),
-    #                    ]:
-    #     # todo - calculate amount remaining of loan (student loan)
-    #     total = calculate_compound_savings(data_monthly[c], initial, interest_rate, COMPOUNDING_PERIODS)
-    #     data_monthly[f'{c}_total'] = total['total']
-    #     data_monthly[c] = -total[c]
+
+def combine_aggregate_savings_loans(periodic_compounding_exp: pd.DataFrame, target_amount: dict):
+    periodic_compounding_exp_ = periodic_compounding_exp.copy()
+
+    aggregate_targets = list(filter(lambda t: '+' in t, target_amount.keys()))
+
+    for aggregate_target in aggregate_targets:
+        targets = aggregate_target.split('+')
+        periodic_compounding_exp_[aggregate_target] = periodic_compounding_exp_[targets].sum(axis=1)
+        periodic_compounding_exp_[aggregate_target + '_total'] = periodic_compounding_exp_[
+            map(lambda c: c + '_total', targets)].sum(axis=1)
+        periodic_compounding_exp_[aggregate_target + '_interest'] = periodic_compounding_exp_[
+            map(lambda c: c + '_interest', targets)].sum(axis=1)
+
+    return periodic_compounding_exp_
+
+
+def get_compounding_exp(
+        periodic_salary_tax,
+        source,
+        cost_factors,
+        interest,
+        initial_balances,
+        names,
+        interest_rate,
+        COMPOUNDING_PERIODS,
+        target_amount,
+):
+    # calculate savings and loan amounts through time
+    periodic_compounding_exp = get_compounding_exp_cases(
+        [
+            dict(
+                name=name,
+                source=periodic_salary_tax[source[name]],
+                factor=cost_factors[name],
+                interest=interest[name],
+                initial=initial_balances[name]
+            )
+            for name in names
+        ],
+        interest_rate,
+        COMPOUNDING_PERIODS,
+    )
+
+    # aggregate savings/loans, defined by savings_loans.target_amount
+    periodic_compounding_exp = combine_aggregate_savings_loans(periodic_compounding_exp, target_amount)
+
+    return periodic_compounding_exp
 
 
 def get_varexinc(
@@ -64,7 +101,7 @@ def get_varexinc(
         varinc_end,
         varinc_inflation,
         varinc_in,
-        start_from,
+        from_date,
 ):
     """
 
@@ -76,7 +113,7 @@ def get_varexinc(
     :param varex_end:
     :param varinc_inflation:
     :param months_until_retirement:
-    :param start_from:
+    :param from_date:
     :return:
     """
     # if datetime_index is None:
@@ -87,11 +124,11 @@ def get_varexinc(
     # years = math.ceil(months/12)
 
     yearly_varex = pd.DataFrame({k: pd.Series(np.repeat([v], math.ceil(years)))
-                                              for k, v in varex.items()
-                                              if not isinstance(v, list)})
+                                 for k, v in varex.items()
+                                 if not isinstance(v, list)})
     yearly_varinc = pd.DataFrame({k: pd.Series(np.repeat([v], math.ceil(years)))
-                                              for k, v in varinc.items()
-                                              if not isinstance(v, list)})
+                                  for k, v in varinc.items()
+                                  if not isinstance(v, list)})
 
     for idc, col in yearly_varex.iteritems():
         if varex_inflation.get(idc, True):
@@ -105,7 +142,7 @@ def get_varexinc(
         periodic = expand_yearly(
             col.values, idc,
             volume,
-            start_from,
+            from_date,
             granularity=granularity,
             freq=freq
         )
@@ -129,7 +166,7 @@ def get_varexinc(
         periodic = expand_yearly(
             col.values, idc,
             volume,
-            start_from,
+            from_date,
             granularity=granularity,
             freq=freq
         )
